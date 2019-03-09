@@ -39,9 +39,7 @@ NTSTATUS DispatchRoutine(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
 		, "IRP_MJ_DEVICE_CHANGE			 "
 		, "IRP_MJ_QUERY_QUOTA			 "
 		, "IRP_MJ_SET_QUOTA				 "
-		, "IRP_MJ_PNP					 "
-		, "IRP_MJ_PNP_POWER				 "
-		, "IRP_MJ_MAXIMUM_FUNCTION		 " };
+		, "IRP_MJ_PNP					 " };
 
 	KdPrint(("%s\n", typeIrp[stack->MajorFunction]));
 	Irp->IoStatus.Information = 0;
@@ -127,5 +125,9 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 		DriverObject->MajorFunction[i] = DispatchRoutine;
 	}
 	DriverObject->MajorFunction[IRP_MJ_READ] = DispatchRead;
+
+	DeviceObject->Flags |= DO_BUFFERED_IO;				//通知操作系统该设备为缓冲区读写方式
+	DeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;		//通知操作系统该设备已可以使用了
+
 	return STATUS_SUCCESS;
 }

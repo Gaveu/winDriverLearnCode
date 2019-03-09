@@ -1,9 +1,5 @@
 #include<stdio.h>
 #include<Windows.h>
-#include<stdlib.h>
-
-//获取数组元素个数
-#define ARR_LEN(a) (sizeof((a))/sizeof((a[0])))
 
 int main()
 {
