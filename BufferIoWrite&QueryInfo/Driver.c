@@ -3,6 +3,9 @@
 VOID Unload(IN PDRIVER_OBJECT DriverObject)
 {
 	KdPrint(("Driver Unload!\n"));
+	UNICODE_STRING SymbolicLinkPath = RTL_CONSTANT_STRING(L"\\??\\HelloDDK");
+	IoDeleteDevice(DriverObject->DeviceObject);
+	IoDeleteSymbolicLink(&SymbolicLinkPath);
 
 }
 
@@ -96,7 +99,7 @@ NTSTATUS DispatchQueryInfo(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
 			PFILE_STANDARD_INFORMATION pfsi = (PFILE_STANDARD_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
 			status = STATUS_SUCCESS;
 			pfsi->EndOfFile.LowPart = 512 * 10;
-			Length = sizeof(FileStandardInformation);
+			Length = sizeof(FILE_STANDARD_INFORMATION);
 		}
 		else
 		{
@@ -135,6 +138,8 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 	if (!NT_SUCCESS(status))
 	{
 		KdPrint(("Device create failed! 0x%x\n", status));
+		IoDeleteDevice(DeviceObject);
+		IoDeleteSymbolicLink(&SymbolicLinkPath);
 		return status;
 	}
 	status = IoCreateSymbolicLink(&SymbolicLinkPath, &DeviceName);
