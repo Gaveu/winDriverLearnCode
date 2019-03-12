@@ -94,7 +94,7 @@ NTSTATUS DispatchQueryInfo(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
 	{
 		Length = stack->Parameters.QueryFile.Length;
 		if (stack->Parameters.QueryFile.FileInformationClass == FileStandardInformation &&
-			Length >= sizeof(FileStandardInformation))
+			Length >= sizeof(FILE_STANDARD_INFORMATION))
 		{
 			PFILE_STANDARD_INFORMATION pfsi = (PFILE_STANDARD_INFORMATION)Irp->AssociatedIrp.SystemBuffer;
 			status = STATUS_SUCCESS;
