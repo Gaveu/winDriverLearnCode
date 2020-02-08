@@ -2,6 +2,9 @@
 
 void Unload(PDRIVER_OBJECT DriverObject)
 {
+	UNICODE_STRING SymbolicLinkName = RTL_CONSTANT_STRING(L"\\Global??\\HelloDDK");
+	IoDeleteSymbolicLink(&SymbolicLinkName);
+	KdPrint(("SymbolicLink Delete Success!\n"));
 	IoDeleteDevice(DriverObject->DeviceObject);	//PDEVICE_OBJECT
 	KdPrint(("GoodBye Driver!\n"));
 	
@@ -12,6 +15,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 	NTSTATUS status;
 	PDEVICE_OBJECT DeviceObject;
 	UNICODE_STRING DeviceName = RTL_CONSTANT_STRING(L"\\Device\\HelloDDK");
+	UNICODE_STRING SymbolicLinkName = RTL_CONSTANT_STRING(L"\\Global??\\HelloDDK");
 	KdPrint(("DriverLoading!\n"));
 	DriverObject->DriverUnload = Unload;
 
@@ -29,6 +33,18 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 		KdPrint(("DeviceObject Create Failed!\n"));
 		return status;
 	}
+
+	status = IoCreateSymbolicLink(
+		&SymbolicLinkName,		//PUNICODE_STRING	SymbolicLinkName	新建的链接符号名
+		&DeviceName);			//PUNICODE_STRING	DeviceName			链接符号名连接的设备对象
+	if (!NT_SUCCESS(status))
+	{
+		KdPrint(("SymbolicLink Create Failed!\n"));
+		IoDeleteDevice(DeviceObject);
+		return status;
+	}
+	KdPrint(("SymbolicLink Create Success!\n"));
+
 	//设定标志位，表示该设备对象以缓冲区输入输出，并结束初始化
 	DeviceObject->Flags |= DO_BUFFERED_IO;			
 	DeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
