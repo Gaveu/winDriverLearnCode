@@ -276,13 +276,117 @@ VOID KeyEnum()
 	ExFreePool(pkvfi);
 }
 
+VOID KeyDelete()
+{
+	ULONG i;
+	HANDLE hKey;
+	NTSTATUS status;
+	OBJECT_ATTRIBUTES oa;
+	UNICODE_STRING KeyPath = RTL_CONSTANT_STRING(L"\\Registry\\Machine\\SOFTWARE\\MyKey01");
+	UNICODE_STRING ValueName;
+	InitializeObjectAttributes(
+		&oa,
+		&KeyPath,
+		OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE,
+		NULL,
+		NULL
+		);
+	status = ZwOpenKey(&hKey, KEY_ALL_ACCESS, &oa);
+	if (!NT_SUCCESS(status))
+	{
+		KdPrint(("Key Open Failed!%x\n", status));
+		return;
+	}
+
+	//删除键值
+	RtlInitUnicodeString(&ValueName, L"StringValue");
+	status = ZwDeleteValueKey(
+		hKey,		//待删除键值所在的键句柄
+		&ValueName	//待删除键值名
+		);
+	if (!NT_SUCCESS(status))
+	{
+		KdPrint(("Value Delete Failed!%x\n", status));
+		return;
+	}
+	ZwClose(hKey);
+
+	//删除子键
+	RtlInitUnicodeString(&KeyPath, L"\\Registry\\Machine\\SOFTWARE\\MyKey01\\MySub01");
+	status = ZwOpenKey(&hKey, KEY_ALL_ACCESS, &oa);
+	if (!NT_SUCCESS(status))
+	{
+		KdPrint(("SubKey Open Failed!%x\n", status));
+		return;
+	}
+	status = ZwDeleteKey(hKey);	//传入待删除键的句柄
+	if (!NT_SUCCESS(status))
+	{
+		KdPrint(("SubKey Delete Failed!%x\n", status));
+		return;
+	}
+	ZwClose(hKey);
+}
+
+VOID RtlTest()
+{
+	NTSTATUS status;
+	//创建新键
+	status = RtlCreateRegistryKey(RTL_REGISTRY_USER, L"\\Software\\MyKey02");
+	if (!NT_SUCCESS(status))
+	{
+		KdPrint(("Key Create Failed!%x\n",status));
+		return;
+	}
+
+	//检查键是否存在
+	status = RtlCheckRegistryKey(RTL_REGISTRY_USER, L"\\Software\\MyKey02");
+	if (NT_SUCCESS(status))
+	{
+		KdPrint(("Key Existed!\n"));
+	}
+	else
+	{
+		KdPrint(("Key Doesn't Exist!%x\n",status));
+	}
+
+	//写入新键值
+	status = RtlWriteRegistryValue(
+		RTL_REGISTRY_USER,		//新键值所在键的路径相对处
+		L"\\Software\\MyKey02",	//新键值所在键的相对路径
+		L"StringValue1",		//新键值的键名
+		REG_SZ,					//新键值的数据类型
+		L"String From Kernel",	//新键值的数据
+		wcslen(L"String From Kernel")*sizeof(WCHAR)	//新键值的数据长度大小(字节单位)
+		);
+	if (!NT_SUCCESS(status))
+	{
+		KdPrint(("Value Create Failed!%x\n",status));
+		return;
+	}
+
+	
+	//删除键值
+	status = RtlDeleteRegistryValue(
+		RTL_REGISTRY_USER,		//待删键值所在键的路径相对处
+		L"\\Software\\MyKey02",	//待删键值所在键的相对路径
+		L"StringValue1"			//待删键值的键名
+		);
+	if (!NT_SUCCESS(status))
+	{
+		KdPrint(("Value Delete Failed!%x\n", status));
+		return;
+	}
+	
+}
+
 NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING RegistryPath)
 {
 
 	KdPrint(("Hello Driver!\n"));
 	DriverObject->DriverUnload = Unload;
 
-	KeyEnum();
+	RtlTest();
 
 	return STATUS_SUCCESS;
 }
