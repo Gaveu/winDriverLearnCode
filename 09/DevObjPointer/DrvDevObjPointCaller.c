@@ -38,15 +38,28 @@ NTSTATUS DrvCallerTest3()
 		);
 
 	//构造同步系统文件请求IRP,以函数返回值的形式返回该构造好的IRP
-	pIrp = IoBuildSynchronousFsdRequest(
+	//同步方式
+	//pIrp = IoBuildSynchronousFsdRequest(
+	//	IRP_MJ_READ,	//待传送的IRP请求类型
+	//	DeviceObject,	//IRP请求传送的目标设备对象
+	//	NULL,			//缓冲区地址
+	//	0,				//缓冲区长度
+	//	NULL,			//读写字节起始偏移量
+	//	&event,			//同步事件对象，当IRP传送成功后会释放该事件
+	//	&IoStatus		//返回的IO状态体
+	//	);
+
+	//构造同步系统文件请求IRP,以函数返回值的形式返回该构造好的IRP
+	//异步方式
+	pIrp = IoBuildAsynchronousFsdRequest(
 		IRP_MJ_READ,	//待传送的IRP请求类型
 		DeviceObject,	//IRP请求传送的目标设备对象
 		NULL,			//缓冲区地址
 		0,				//缓冲区长度
 		NULL,			//读写字节起始偏移量
-		&event,			//同步事件对象，当IRP传送成功后会释放该事件
 		&IoStatus		//返回的IO状态体
 		);
+	pIrp->UserEvent = &event;
 
 	//初始化IO栈单元
 	PIO_STACK_LOCATION stack = IoGetNextIrpStackLocation(pIrp);
