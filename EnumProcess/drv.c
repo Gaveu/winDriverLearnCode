@@ -2,12 +2,15 @@
 #include<ntstrsafe.h>
 #include<ntddk.h>
 
+PCHAR PsGetProcessImageFileName(PEPROCESS Process);
+
 VOID Unload(IN PDRIVER_OBJECT DriverObject)
 {
 	KdPrint(("GoodBye Driver!\n"));
 }
 
-VOID PsEnum()
+//基于进程双链表的遍历，较快，但由于采用硬编码而有兼容性问题
+VOID PsEnum1()
 {
 	PEPROCESS pEproc = NULL;		//获取进程地址
 	PEPROCESS pFirstProc = NULL;	//保存EPROCESS进程双链表头节点
@@ -24,6 +27,7 @@ VOID PsEnum()
 	}
 	pFirstProc = pEproc;
 	KdBreakPoint();
+	KdPrint(("PsEnum1!\n"));
 	do
 	{
 		pProcName = (PUCHAR)pEproc + 0x16c;
@@ -33,13 +37,35 @@ VOID PsEnum()
 		pLe = pLe->Flink;
 		pEproc = (PEPROCESS)((PCHAR)pLe - 0xb8);
 	} while (pEproc != pFirstProc);
+	KdPrint(("---------------------\n"));
+}
+
+//较通用，无兼容性问题，但为线性遍历
+VOID PsEnum2()
+{
+	ULONG ulPid = 0;
+	PEPROCESS pEproc = NULL;
+	PUCHAR pProcName = NULL;
+	NTSTATUS status;
+	KdPrint(("PsEnum2!\n"));
+	for (ulPid = 4; ulPid < 20000; ulPid += 4)
+	{
+		status = PsLookupProcessByProcessId((HANDLE)ulPid, &pEproc);
+		if(NT_SUCCESS(status))
+		{
+			pProcName = PsGetProcessImageFileName(pEproc);
+			KdPrint(("pid:%d\t%s\n", ulPid, pProcName));
+		}
+	}
+	KdPrint(("---------------------\n"));
 }
 
 NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING RegistryPath)
 {
 	KdPrint(("Hello Driver!\n"));
 	DriverObject->DriverUnload = Unload;
-	PsEnum();
+	PsEnum1();
+	PsEnum2();
 	return STATUS_SUCCESS;
 }
 
