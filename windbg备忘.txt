@@ -1,0 +1,39 @@
+//符号文件配置
+srv*c:\symbols*http://msdl.microsoft.com/download/symbols
+SRV*C:\Symbols*http://msdl.microsoft.com/download/symbols
+SRV*C:\Symbol_folder*http://msdl.microsoft.com/download/symbols
+
+//离线下载符号文件
+//dxdiag查看系统版本
+//https://bbs.pediy.com/thread-251052.htm找对应系统符号
+
+
+
+//关闭SKS编码
+ed nt!kd_fusion_mask 0
+
+//驱动模块入口点下断
+bu DrvName!DriverEntry
+
+//根据结构体符号查看结构体各成员变量、变量类型及其偏移
+dt 结构体名
+例：dt _eprocess
+出现符号错误时，重配符号文件并执行
+.reload /f nt
+.reload /o	//查看符号文件配置出错原因
+
+//根据首地址与结构体符号，查看内存中结构体内各成员变量值
+dt 结构体名 结构体起始地址
+例：dt _KUSER_SHARED_DATA 0xffdf0000
+
+//状态码的转化
+local内status = On-1073741816
+可键入 ? On-1073741816
+得Evaluate expression: -1073741816 C0000008
+
+//清屏
+.cls
+
+//反汇编指定函数
+uf 函数符号名
+
