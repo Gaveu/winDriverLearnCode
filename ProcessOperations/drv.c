@@ -2,13 +2,21 @@
 #include<ntstrsafe.h>
 #include<ntddk.h>
 
-PCHAR PsGetProcessImageFileName(PEPROCESS Process);
+//微软有导出，但未文档化
+PCHAR PsGetProcessImageFileName(PEPROCESS Process);	//获取指定进程的进程名
+HANDLE PsGetProcessInheritedFromUniqueProcessId(PEPROCESS Process);	//获取指定进程的父进程ID
+NTSTATUS PsSuspendProcess(PEPROCESS Process);	//暂停指定进程执行
+NTSTATUS PsResumeProcess(PEPROCESS Process);	//恢复指定进程执行
 
-VOID Unload(IN PDRIVER_OBJECT DriverObject)
-{
-	KdPrint(("GoodBye Driver!\n"));
-}
+//配置函数指针，使xp平台也能使用平台未导入的函数
+typedef NTSTATUS(*pFuncXpPsSuspendProcess)(PEPROCESS Process);
+typedef NTSTATUS(*pFuncXpPsResumeProcess)(PEPROCESS Process);
 
+//函数首地址通过windbg执行“uf 函数符号名”，进行内存检索而得
+pFuncXpPsSuspendProcess pXpPsSuspendProcess = (pFuncXpPsSuspendProcess)0x8411f717;	//uf nt!PsSuspendProcess
+pFuncXpPsResumeProcess pXpPsResumeProcess = (pFuncXpPsResumeProcess)0x8411f7d4;		//uf nt!PsResumeProcess
+
+//进程枚举
 //基于进程双链表的遍历，较快，但由于采用硬编码而有兼容性问题
 VOID PsEnum1()
 {
@@ -26,13 +34,16 @@ VOID PsEnum1()
 		return;
 	}
 	pFirstProc = pEproc;
-	KdBreakPoint();
+	//KdBreakPoint();
 	KdPrint(("PsEnum1!\n"));
 	do
 	{
 		pProcName = (PUCHAR)pEproc + 0x16c;
 		ulPid = *(ULONG *)((PCHAR)pEproc + 0xb4);
-		KdPrint(("pid:%d\t%s\n", ulPid, pProcName));
+		KdPrint(("PID:%d\tparentID:%d\t%s\n",
+			ulPid,
+			(ULONG)PsGetProcessInheritedFromUniqueProcessId(pEproc),
+			pProcName));
 		pLe = (PLIST_ENTRY)((PCHAR)pEproc + 0xb8);
 		pLe = pLe->Flink;
 		pEproc = (PEPROCESS)((PCHAR)pLe - 0xb8);
@@ -54,18 +65,131 @@ VOID PsEnum2()
 		if(NT_SUCCESS(status))
 		{
 			pProcName = PsGetProcessImageFileName(pEproc);
-			KdPrint(("pid:%d\t%s\n", ulPid, pProcName));
+			KdPrint(("PID:%d\tparentID:%d\t%s\n", 
+				ulPid, 
+				(ULONG)PsGetProcessInheritedFromUniqueProcessId(pEproc),
+				pProcName));
 		}
 	}
 	KdPrint(("---------------------\n"));
+}
+
+//进程暂停
+//给定进程pid，暂停对应进程的执行
+NTSTATUS PsSuspend(HANDLE hPid)
+{
+	NTSTATUS status;
+	PEPROCESS pEproc = NULL;
+	status = PsLookupProcessByProcessId(hPid, &pEproc);
+
+	if (NT_SUCCESS(status))
+	{
+		//xp->Nt.5版本则以硬函数编码方式执行函数
+		if (SharedUserData->NtMajorVersion == 5)
+		{
+			status = pXpPsSuspendProcess(pEproc);
+		}
+		else
+		{
+			status = PsSuspendProcess(pEproc);
+		}
+		if (NT_SUCCESS(status))
+		{
+			KdPrint(("pid:%d\t%s\t Suspend!\n", (ULONG)hPid, PsGetProcessImageFileName(pEproc)));
+		}
+	}
+	return status;
+}
+
+//进程恢复
+//给定进程pid，恢复对应进程的执行
+NTSTATUS PsResume(HANDLE hPid)
+{
+	NTSTATUS status;
+	PEPROCESS pEproc = NULL;
+	status = PsLookupProcessByProcessId(hPid, &pEproc);
+
+	if (NT_SUCCESS(status))
+	{
+		//xp->Nt.5版本则以硬函数编码方式执行函数
+		if (SharedUserData->NtMajorVersion == 5)
+		{
+			status = pXpPsResumeProcess(pEproc);
+		}
+		else
+		{
+			status = PsResumeProcess(pEproc);
+		}
+		if (NT_SUCCESS(status))
+		{
+			KdPrint(("pid:%d\t%s\t Resume!\n", (ULONG)hPid, PsGetProcessImageFileName(pEproc)));
+		}
+	}
+
+	return status;
+}
+
+//进程终止
+//给定进程pid，终止对应进程的执行
+NTSTATUS PsTerminate(HANDLE hPid)
+{
+	HANDLE hProc = NULL;
+	CLIENT_ID clientId = { 0 };
+	NTSTATUS status;
+	OBJECT_ATTRIBUTES oa;
+	clientId.UniqueProcess = hPid;
+	InitializeObjectAttributes(
+		&oa,
+		NULL,
+		OBJ_KERNEL_HANDLE,
+		NULL,
+		NULL
+	);
+
+	status = ZwOpenProcess(
+		&hProc,
+		PROCESS_ALL_ACCESS,
+		&oa,
+		&clientId
+	);
+	if (NT_SUCCESS(status))
+	{
+		status = ZwTerminateProcess(hProc, 0);
+		if (NT_SUCCESS(status))
+		{
+			KdPrint(("PID:%d\tTerminate Success!\n", hPid));
+		}
+		else
+		{
+			KdPrint(("TerminateProcess Failed!0x%x\n", status));
+		}
+	}
+	else
+	{
+		KdPrint(("OpenProcess Failed!0x%x\n",status));
+	}
+	ZwClose(hProc);
+	return status;
+}
+
+VOID Unload(IN PDRIVER_OBJECT DriverObject)
+{
+	//PsResume((HANDLE)2424);	//虚拟机内运行calc.exe进程对应pid为2424，执行成功时该进程继续执行
+	KdPrint(("GoodBye Driver!\n"));
 }
 
 NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING RegistryPath)
 {
 	KdPrint(("Hello Driver!\n"));
 	DriverObject->DriverUnload = Unload;
-	PsEnum1();
-	PsEnum2();
+
+	//PsEnum1();
+	//PsEnum2();
+
+	//PsSuspend((HANDLE)2424);	//虚拟机内运行calc.exe进程对应pid为2424，执行成功时该进程暂停执行
+
+	PsTerminate((HANDLE)2548);	//虚拟机内运行calc.exe进程对应pid为2548，执行成功时该进程结束执行
+
 	return STATUS_SUCCESS;
 }
 
