@@ -3,19 +3,66 @@
 #include<ntstrsafe.h>
 #include<ntddk.h>
 
+
 //微软有导出，但未文档化
 PCHAR PsGetProcessImageFileName(PEPROCESS Process);	//获取指定进程的进程名
 HANDLE PsGetProcessInheritedFromUniqueProcessId(PEPROCESS Process);	//获取指定进程的父进程ID
 NTSTATUS PsSuspendProcess(PEPROCESS Process);	//暂停指定进程执行
 NTSTATUS PsResumeProcess(PEPROCESS Process);	//恢复指定进程执行
+PPEB PsGetProcessPeb(PEPROCESS process);	//返回指定进程的PEB结构体
 
 //配置函数指针，使xp平台也能使用平台未导入的函数
 typedef NTSTATUS(*pFuncXpPsSuspendProcess)(PEPROCESS Process);
 typedef NTSTATUS(*pFuncXpPsResumeProcess)(PEPROCESS Process);
+//下列数据结构来源：winternl.h、WinDef.h
+typedef unsigned char BYTE;
+typedef struct _PEB_LDR_DATA {
+	BYTE Reserved1[8];
+	PVOID Reserved2[3];
+	LIST_ENTRY InMemoryOrderModuleList;
+} PEB_LDR_DATA, *PPEB_LDR_DATA;
+typedef struct _LDR_DATA_TABLE_ENTRY {
+	PVOID Reserved1[2];
+	LIST_ENTRY InMemoryOrderLinks;
+	PVOID Reserved2[2];
+	PVOID DllBase;
+	PVOID Reserved3[2];
+	UNICODE_STRING FullDllName;
+	BYTE Reserved4[8];
+	PVOID Reserved5[3];
+	union {
+		ULONG CheckSum;
+		PVOID Reserved6;
+	} DUMMYUNIONNAME;
+	ULONG TimeDateStamp;
+} LDR_DATA_TABLE_ENTRY, *PLDR_DATA_TABLE_ENTRY;
+typedef struct _PEB {
+	BYTE Reserved1[2];
+	BYTE BeingDebugged;
+	BYTE Reserved2[1];
+	PVOID Reserved3[2];
+	PPEB_LDR_DATA Ldr;
+	PVOID ProcessParameters;
+	PVOID Reserved4[3];
+	PVOID AtlThunkSListPtr;
+	PVOID Reserved5;
+	ULONG Reserved6;
+	PVOID Reserved7;
+	ULONG Reserved8;
+	ULONG AtlThunkSListPtr32;
+	PVOID Reserved9[45];
+	BYTE Reserved10[96];
+	PVOID PostProcessInitRoutine;
+	BYTE Reserved11[128];
+	PVOID Reserved12[1];
+	ULONG SessionId;
+} PEB, *PPEB;
+
 
 //函数首地址通过windbg执行“uf 函数符号名”，进行内存检索而得
 static pFuncXpPsSuspendProcess pXpPsSuspendProcess = (pFuncXpPsSuspendProcess)0x8411f717;	//uf nt!PsSuspendProcess
 static pFuncXpPsResumeProcess pXpPsResumeProcess = (pFuncXpPsResumeProcess)0x8411f7d4;		//uf nt!PsResumeProcess
+
 
 
 //进程枚举
@@ -40,6 +87,10 @@ NTSTATUS PsResume(HANDLE hPid);
 //给定进程pid，终止对应进程的执行
 NTSTATUS PsTerminate(HANDLE hPid);
 
+
+//进程模块枚举
+//给定进程的_EPROCESS结构指针，枚举其已装载的模块
+VOID PsEnumModule(PEPROCESS process);
 
 //线程枚举
 //根据线程ID枚举所有线程及其对应进程ID、进程名

@@ -32,7 +32,8 @@ VOID PsEnum1()
 			ulPid,
 			(ULONG)PsGetProcessInheritedFromUniqueProcessId(pEproc),
 			pProcName));
-		ThEnum2(pEproc);
+		//PsEnumModule(pEproc);
+		//ThEnum2(pEproc);
 		pLe = (PLIST_ENTRY)((PCHAR)pEproc + 0xb8);
 		pLe = pLe->Flink;
 		pEproc = (PEPROCESS)((PCHAR)pLe - 0xb8);
@@ -58,8 +59,9 @@ VOID PsEnum2()
 				ulPid,
 				(ULONG)PsGetProcessInheritedFromUniqueProcessId(pEproc),
 				pProcName));
-			ThEnum3(pEproc);
+			//ThEnum3(pEproc);
 		}
+		ObDereferenceObject(pEproc);
 	}
 	KdPrint(("---------------------\n"));
 }
@@ -160,4 +162,74 @@ NTSTATUS PsTerminate(HANDLE hPid)
 	}
 	ZwClose(hProc);
 	return status;
+}
+
+
+//进程模块枚举
+//给定进程的_EPROCESS结构指针，枚举其已装载的模块
+VOID PsEnumModule(PEPROCESS process)
+{
+	if (!process)
+	{
+		return;
+	}
+	//KdBreakPoint();
+	KAPC_STATE kApcState;
+	NTSTATUS status;
+	PPEB pPeb = PsGetProcessPeb(process);
+	PLIST_ENTRY pLe;
+	PLIST_ENTRY pFirLe;
+	PLDR_DATA_TABLE_ENTRY pLdrDataEntry;
+	if (!pPeb)
+	{
+		return;
+	}
+
+	//保证当前进程可以访问目标进程地址空间
+	KeStackAttachProcess(process, &kApcState);
+	pFirLe = pLe = pPeb->Ldr->InMemoryOrderModuleList.Flink;
+	do
+	{
+		//根据成员变量InMemoryOrderLinks在LDR_DATA_TABLE_ENTRY结构体内的偏移，计算pLe对应的LDR_DATA_TABLE_ENTRY结构体内存首地址
+		pLdrDataEntry = CONTAINING_RECORD(
+			pLe,
+			LDR_DATA_TABLE_ENTRY,
+			InMemoryOrderLinks
+		);
+		if (pLdrDataEntry->DllBase)
+		{
+			KdPrint(("--%wZ\tBase:%p\n",
+				&pLdrDataEntry->FullDllName,
+				pLdrDataEntry->DllBase));
+		}
+		pLe = pLe->Flink;
+	} while (pLe->Flink != pFirLe);
+	KeUnstackDetachProcess(&kApcState);
+
+	/*
+	__try
+	{
+		//保证当前进程可以访问目标进程地址空间
+		KeStackAttachProcess(process, &kApcState);
+		pFirLe = pLe = pPeb->Ldr->InMemoryOrderModuleList.Flink;
+		do
+		{
+			//根据成员变量InMemoryOrderLinks在LDR_DATA_TABLE_ENTRY结构体内的偏移，计算pLe对应的LDR_DATA_TABLE_ENTRY结构体内存首地址
+			pLdrDataEntry = CONTAINING_RECORD(
+				pLe,
+				LDR_DATA_TABLE_ENTRY,
+				InMemoryOrderLinks
+			);
+			KdPrint(("--%wZ\tBase:%p\n",
+				&pLdrDataEntry->FullDllName,
+				pLdrDataEntry->DllBase));
+			pLe = pLdrDataEntry->InMemoryOrderLinks.Flink;
+		} while (pLe != pFirLe);
+		KeUnstackDetachProcess(&kApcState);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		KdPrint(("%s DLLinfo Read Failed!\n", PsGetProcessImageFileName(process)));
+	}
+	*/
 }

@@ -21,6 +21,7 @@ VOID ThEnum1()
 			pProcName = PsGetProcessImageFileName(pEproc);
 			KdPrint(("Tid:%d\tPid:%d\t%s\n", ulThreadId, ulPid, pProcName));
 		}
+		ObDereferenceObject(pEth);
 	}
 }
 
@@ -68,5 +69,6 @@ VOID ThEnum3(PEPROCESS process)
 				KdPrint(("\tTid:%d\n", tid));
 			}
 		}
+		ObDereferenceObject(pThd);
 	}
 }
