@@ -3,6 +3,8 @@ srv*c:\symbols*http://msdl.microsoft.com/download/symbols
 SRV*C:\Symbols*http://msdl.microsoft.com/download/symbols
 SRV*C:\Symbol_folder*http://msdl.microsoft.com/download/symbols
 
+.sympath SRV*C:\Symbol_folder*http://msdl.microsoft.com/download/symbols
+
 //离线下载符号文件
 //dxdiag查看系统版本
 //https://bbs.pediy.com/thread-251052.htm找对应系统符号
@@ -36,4 +38,8 @@ local内status = On-1073741816
 
 //反汇编指定函数
 uf 函数符号名
+
+//查询符号表中的导出函数
+x 函数名
+例:x nt!PsSuspendThread
 
